@@ -113,14 +113,15 @@ class FilterQueryBuilder(BaseQueryBuilder):
                 param = param.replace("__%s" % negation_keyword, "")  # haystack wouldn't understand our negation
 
             if self.view.serializer_class:
-                if self.view.serializer_class.Meta.field_aliases:
-                    old_base = base_param
-                    base_param = self.view.serializer_class.Meta.field_aliases.get(base_param, base_param)
-                    param = param.replace(old_base, base_param)  # need to replace the alias
+                fields = getattr(self.view.serializer_class.Meta, 'fields', tuple())
+                exclude = getattr(self.view.serializer_class.Meta, 'exclude', tuple())
+                search_fields = getattr(self.view.serializer_class.Meta, 'search_fields', tuple())
+                field_aliases = getattr(self.view.serializer_class.Meta, 'field_aliases', dict())
 
-                fields = self.view.serializer_class.Meta.fields
-                exclude = self.view.serializer_class.Meta.exclude
-                search_fields = self.view.serializer_class.Meta.search_fields
+                if field_aliases:
+                    old_base = base_param
+                    base_param = field_aliases.get(base_param, base_param)
+                    param = param.replace(old_base, base_param)  # need to replace the alias
 
                 if ((fields or search_fields) and base_param not in chain(fields, search_fields)) or base_param in exclude or not value:
                     continue
