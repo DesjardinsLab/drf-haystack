@@ -15,11 +15,11 @@ from haystack.query import SearchQuerySet
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.routers import SimpleRouter
-from rest_framework.serializers import Serializer
+from rest_framework.serializers import Serializer, ModelSerializer
 from rest_framework.test import force_authenticate, APIRequestFactory
 
 from drf_haystack.viewsets import HaystackViewSet
-from drf_haystack.serializers import HaystackSerializer, HaystackFacetSerializer
+from drf_haystack.serializers import HaystackSerializer, HaystackFacetSerializer, HaystackSerializerMixin
 from drf_haystack.mixins import MoreLikeThisMixin, FacetMixin
 
 from .mockapp.models import MockPerson, MockPet
@@ -62,6 +62,7 @@ class HaystackViewSetTestCase(TestCase):
 
     def tearDown(self):
         MockPersonIndex().clear()
+        MockPetIndex().clear()
 
     def test_viewset_get_queryset_no_queryset(self):
         request = factory.get(path="/", data="", content_type="application/json")
@@ -126,6 +127,42 @@ class HaystackViewSetTestCase(TestCase):
     def test_viewset_facets_action_route(self):
         request = factory.get(path="/", data={}, content_type="application/json")
         response = self.view1.as_view(actions={"get": "facets"})(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class HaystackViewSetTestCaseWithHaystackSerializerMixin(TestCase):
+
+    fixtures = ["mockperson"]
+
+    def setUp(self):
+        MockPersonIndex().reindex()
+
+        class MockPersonSerializer(ModelSerializer):
+            class Meta:
+                model = MockPerson
+                fields = ('id', 'firstname', 'lastname', 'created', 'updated')
+                read_only_fields = ('created', 'updated')
+
+        class Serializer1(HaystackSerializerMixin, MockPersonSerializer):
+            class Meta(MockPersonSerializer.Meta):
+                search_fields = ['text', ]
+
+        class Viewset1(HaystackViewSet):
+            serializer_class = Serializer1
+
+        self.view1 = Viewset1
+
+    def tearDown(self):
+        MockPersonIndex().clear()
+
+    def test_viewset_list_no_query_params(self):
+        request = factory.get(path="/", data="", content_type="application/json")
+        response = self.view1.as_view(actions={"get": "list"})(request)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_viewset_list_with_query_params(self):
+        request = factory.get(path="/", data={'text__contains': ''}, content_type="application/json")
+        response = self.view1.as_view(actions={"get": "list"})(request)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
